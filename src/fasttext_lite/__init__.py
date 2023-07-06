@@ -1,3 +1,3 @@
-from .core import FastTextClassifier
+from .core import FastTextClassifier, FastTextMultiOutputClassifier
 
-__all__ = ["FastTextClassifier"]
+__all__ = ["FastTextClassifier", "FastTextMultiOutputClassifier"]

@@ -1,11 +1,10 @@
-from itertools import chain
 import json
+from itertools import chain
 from pathlib import Path
-import fasttext
-from typing import Dict, List, Union
-
 from tempfile import NamedTemporaryFile
-from typing import Literal
+from typing import Dict, List, Literal, Union
+
+import fasttext
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.exceptions import NotFittedError
@@ -79,6 +78,13 @@ class FastTextClassifier(BaseEstimator, ClassifierMixin):
         self.adjusted_labels: Dict[str, str] = {}
 
     def fit(self, X, y) -> None:
+        """
+        Parameters
+        ----------
+        X : 1d array-like of length n_samples, the text to be classified
+
+        y : 1d array-like of length n_samples, the target classes
+        """
         self.original_labels = self.sort_labels(y)
         self.adjusted_labels = {
             label: _adjust_label(label) for label in self.original_labels
@@ -87,7 +93,7 @@ class FastTextClassifier(BaseEstimator, ClassifierMixin):
         with NamedTemporaryFile() as train_file:
             with open(train_file.name, "a") as f:
                 for text, label in zip(X, y):
-                    f.write(f"__label__{self.adjusted_labels[label]} {text}\n")
+                    f.write(f"{self.label}{self.adjusted_labels[label]} {text}\n")
 
             self.model = fasttext.train_supervised(
                 input=train_file.name,
@@ -217,3 +223,108 @@ class FastTextClassifier(BaseEstimator, ClassifierMixin):
 
     def _get_original_label_index(self, adjusted_label: str):
         return self.original_labels.index(self._get_original_label(adjusted_label))
+
+
+class FastTextMultiOutputClassifier(FastTextClassifier):
+    def __init__(
+        self,
+        lr: float = 0.1,
+        dim: int = 100,
+        ws: int = 5,
+        epoch: int = 5,
+        minCount: int = 1,
+        minCountLabel: int = 1,
+        minn: int = 0,
+        maxn: int = 0,
+        neg: int = 5,
+        wordNgrams: int = 1,
+        bucket: int = 2000000,
+        lrUpdateRate: int = 100,
+        t: float = 0.0001,
+        label: str = "__label__",
+        verbose: int = 2,
+        thread: int = 2,
+    ):
+        super().__init__(
+            lr=lr,
+            dim=dim,
+            ws=ws,
+            epoch=epoch,
+            minCount=minCount,
+            minCountLabel=minCountLabel,
+            minn=minn,
+            maxn=maxn,
+            neg=neg,
+            wordNgrams=wordNgrams,
+            loss="ova",
+            bucket=bucket,
+            lrUpdateRate=lrUpdateRate,
+            t=t,
+            label=label,
+            verbose=verbose,
+            thread=thread,
+        )
+
+    def fit(self, X, Y, labels) -> None:
+        """
+        Parameters
+        ----------
+        X : 1d array-like of length n_samples, the text to be classified
+
+        Y : array-like of shape (n_samples, n_classes) where 1 indicates that the class
+        is positive and 0 indicates that the class is negative, e.g., output of
+        sklearn.preprocessing.MultiLabelBinarizer.
+
+        labels: list-like of length n_classes, the labels corresponding to the
+        columns of Y
+        """
+        self.original_labels = self.sort_labels(labels)
+        self.adjusted_labels = {
+            label: _adjust_label(label) for label in self.original_labels
+        }
+        self.adjusted_labels_inverse = {v: k for k, v in self.adjusted_labels.items()}
+
+        def row_to_labels(row, original_labels, adjusted_labels):
+            return " ".join(
+                [
+                    f"{self.label}{adjusted_labels[original_labels[i]]}"
+                    for i, value in enumerate(row)
+                    if value == 1
+                ]
+            )
+
+        self.multilabels = [
+            row_to_labels(row, self.original_labels, self.adjusted_labels) for row in Y
+        ]
+
+        with NamedTemporaryFile() as train_file:
+            with open(train_file.name, "a") as f:
+                for text, multilabel in zip(X, self.multilabels):
+                    f.write(f"{multilabel} {text}\n")
+
+            self.model = fasttext.train_supervised(
+                input=train_file.name,
+                lr=self.lr,
+                dim=self.dim,
+                ws=self.ws,
+                epoch=self.epoch,
+                minCount=self.minCount,
+                minCountLabel=self.minCountLabel,
+                minn=self.minn,
+                maxn=self.maxn,
+                neg=self.neg,
+                wordNgrams=self.wordNgrams,
+                loss=self.loss,
+                bucket=self.bucket,
+                lrUpdateRate=self.lrUpdateRate,
+                t=self.t,
+                label=self.label,
+                verbose=self.verbose,
+                thread=self.thread,
+            )
+        self.classes_ = self.original_labels
+        self.fitted = True
+
+    def predict(self, X):
+        # Predicting a single class doesn't make sense in the multilabel context
+        self.predict_proba(X)
