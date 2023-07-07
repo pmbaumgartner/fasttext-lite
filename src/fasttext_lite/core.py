@@ -1,4 +1,5 @@
 import json
+from abc import ABC, abstractmethod
 from itertools import chain
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -34,89 +35,10 @@ def convert_path(path: StrOrPath) -> Path:
         raise TypeError("Not `str` or `Path`")
 
 
-class FastTextClassifier(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        lr: float = 0.1,
-        dim: int = 100,
-        ws: int = 5,
-        epoch: int = 5,
-        minCount: int = 1,
-        minCountLabel: int = 1,
-        minn: int = 0,
-        maxn: int = 0,
-        neg: int = 5,
-        wordNgrams: int = 1,
-        loss: Literal["ns", "hs", "softmax", "ova"] = "softmax",
-        bucket: int = 2000000,
-        lrUpdateRate: int = 100,
-        t: float = 0.0001,
-        label: str = "__label__",
-        verbose: int = 2,
-        thread: int = 2,
-    ):
-        self.lr = lr
-        self.dim = dim
-        self.ws = ws
-        self.epoch = epoch
-        self.minCount = minCount
-        self.minCountLabel = minCountLabel
-        self.minn = minn
-        self.maxn = maxn
-        self.neg = neg
-        self.wordNgrams = wordNgrams
-        self.loss = loss
-        self.bucket = bucket
-        self.lrUpdateRate = lrUpdateRate
-        self.t = t
-        self.label = label
-        self.verbose = verbose
-        self.thread = thread
-        # non-model
-        self.fitted = False
-        self.is_quantized = False
-        self.adjusted_labels: Dict[str, str] = {}
-
-    def fit(self, X, y) -> None:
-        """
-        Parameters
-        ----------
-        X : 1d array-like of length n_samples, the text to be classified
-
-        y : 1d array-like of length n_samples, the target classes
-        """
-        self.original_labels = self.sort_labels(y)
-        self.adjusted_labels = {
-            label: _adjust_label(label) for label in self.original_labels
-        }
-        self.adjusted_labels_inverse = {v: k for k, v in self.adjusted_labels.items()}
-        with NamedTemporaryFile() as train_file:
-            with open(train_file.name, "a") as f:
-                for text, label in zip(X, y):
-                    f.write(f"{self.label}{self.adjusted_labels[label]} {text}\n")
-
-            self.model = fasttext.train_supervised(
-                input=train_file.name,
-                lr=self.lr,
-                dim=self.dim,
-                ws=self.ws,
-                epoch=self.epoch,
-                minCount=self.minCount,
-                minCountLabel=self.minCountLabel,
-                minn=self.minn,
-                maxn=self.maxn,
-                neg=self.neg,
-                wordNgrams=self.wordNgrams,
-                loss=self.loss,
-                bucket=self.bucket,
-                lrUpdateRate=self.lrUpdateRate,
-                t=self.t,
-                label=self.label,
-                verbose=self.verbose,
-                thread=self.thread,
-            )
-        self.classes_ = self.original_labels
-        self.fitted = True
+class BaseFastTextClassifier(ABC, BaseEstimator, ClassifierMixin):
+    @abstractmethod
+    def fit(self):
+        pass
 
     @property
     def n_labels(self):
@@ -225,7 +147,92 @@ class FastTextClassifier(BaseEstimator, ClassifierMixin):
         return self.original_labels.index(self._get_original_label(adjusted_label))
 
 
-class FastTextMultiOutputClassifier(FastTextClassifier):
+class FastTextClassifier(BaseFastTextClassifier):
+    def __init__(
+        self,
+        lr: float = 0.1,
+        dim: int = 100,
+        ws: int = 5,
+        epoch: int = 5,
+        minCount: int = 1,
+        minCountLabel: int = 1,
+        minn: int = 0,
+        maxn: int = 0,
+        neg: int = 5,
+        wordNgrams: int = 1,
+        loss: Literal["ns", "hs", "softmax", "ova"] = "softmax",
+        bucket: int = 2000000,
+        lrUpdateRate: int = 100,
+        t: float = 0.0001,
+        label: str = "__label__",
+        verbose: int = 2,
+        thread: int = 2,
+    ):
+        self.lr = lr
+        self.dim = dim
+        self.ws = ws
+        self.epoch = epoch
+        self.minCount = minCount
+        self.minCountLabel = minCountLabel
+        self.minn = minn
+        self.maxn = maxn
+        self.neg = neg
+        self.wordNgrams = wordNgrams
+        self.loss = loss
+        self.bucket = bucket
+        self.lrUpdateRate = lrUpdateRate
+        self.t = t
+        self.label = label
+        self.verbose = verbose
+        self.thread = thread
+        # non-model
+        self.fitted = False
+        self.is_quantized = False
+        self.adjusted_labels: Dict[str, str] = {}
+
+    def fit(self, X, y) -> None:
+        """
+        Parameters
+        ----------
+        X : 1d array-like of length n_samples, the text to be classified
+
+        y : 1d array-like of length n_samples, the target classes
+        """
+        self.original_labels = self.sort_labels(y)
+        self.adjusted_labels = {
+            label: _adjust_label(label) for label in self.original_labels
+        }
+        self.adjusted_labels_inverse = {v: k for k, v in self.adjusted_labels.items()}
+        with NamedTemporaryFile() as train_file:
+            with open(train_file.name, "a") as f:
+                for text, label in zip(X, y):
+                    f.write(f"{self.label}{self.adjusted_labels[label]} {text}\n")
+
+            self.model = fasttext.train_supervised(
+                input=train_file.name,
+                lr=self.lr,
+                dim=self.dim,
+                ws=self.ws,
+                epoch=self.epoch,
+                minCount=self.minCount,
+                minCountLabel=self.minCountLabel,
+                minn=self.minn,
+                maxn=self.maxn,
+                neg=self.neg,
+                wordNgrams=self.wordNgrams,
+                loss=self.loss,
+                bucket=self.bucket,
+                lrUpdateRate=self.lrUpdateRate,
+                t=self.t,
+                label=self.label,
+                verbose=self.verbose,
+                thread=self.thread,
+            )
+        self.classes_ = self.original_labels
+        self.fitted = True
+
+
+class FastTextMultiOutputClassifier(BaseFastTextClassifier):
     def __init__(
         self,
         lr: float = 0.1,
@@ -245,25 +252,27 @@ class FastTextMultiOutputClassifier(FastTextClassifier):
         verbose: int = 2,
         thread: int = 2,
     ):
-        super().__init__(
-            lr=lr,
-            dim=dim,
-            ws=ws,
-            epoch=epoch,
-            minCount=minCount,
-            minCountLabel=minCountLabel,
-            minn=minn,
-            maxn=maxn,
-            neg=neg,
-            wordNgrams=wordNgrams,
-            loss="ova",
-            bucket=bucket,
-            lrUpdateRate=lrUpdateRate,
-            t=t,
-            label=label,
-            verbose=verbose,
-            thread=thread,
-        )
+        self.lr = lr
+        self.dim = dim
+        self.ws = ws
+        self.epoch = epoch
+        self.minCount = minCount
+        self.minCountLabel = minCountLabel
+        self.minn = minn
+        self.maxn = maxn
+        self.neg = neg
+        self.wordNgrams = wordNgrams
+        self.loss = "ova"
+        self.bucket = bucket
+        self.lrUpdateRate = lrUpdateRate
+        self.t = t
+        self.label = label
+        self.verbose = verbose
+        self.thread = thread
+        # non-model
+        self.fitted = False
+        self.is_quantized = False
+        self.adjusted_labels: Dict[str, str] = {}
 
     def fit(self, X, Y, labels) -> None:
         """
