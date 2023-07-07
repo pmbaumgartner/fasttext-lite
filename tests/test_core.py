@@ -1,6 +1,7 @@
-from fasttext_lite import FastTextClassifier
-import pytest
 import numpy as np
+import pytest
+
+from fasttext_lite import FastTextClassifier, FastTextMultiOutputClassifier
 
 
 @pytest.fixture
@@ -123,6 +124,19 @@ def test_fit_predict(sentences):
     clf.predict_proba(["This is a sentence to predict on", "this is another sentence"])
 
 
+def test_multiclass_fit_predict(sentences):
+    X = sentences
+    label_1 = np.ones(len(X))
+    label_2 = np.array([1 if i % 2 == 0 else 0 for i in range(len(X))])
+    label_3 = np.array([1 if i % 4 == 0 else 0 for i in range(len(X))])
+    Y = np.column_stack((label_1, label_2, label_3))
+    labels = ["Label 1", "Label 2", "Label 3"]
+    clf = FastTextMultiOutputClassifier()
+    clf.fit(X, Y, labels)
+    clf.predict(["This is a sentence to predict on"])
+    clf.predict_proba(["This is a sentence to predict on", "this is another sentence"])
+
+
 def test_save_load(sentences, tmp_path):
     X = sentences
     y = ["Label 1" if i % 2 == 0 else "Label 2" for i in range(len(X))]
@@ -184,3 +198,17 @@ def test_adjusted_labels(sentences):
         "FIRST LABEL": "FIRST_LABEL",
         "SECOND LABEL": "SECOND_LABEL",
     }
+
+
+def test_multiclass_labels(sentences):
+    X = sentences
+    label_1 = np.ones(len(X))
+    label_2 = np.array([1 if i % 2 == 0 else 0 for i in range(len(X))])
+    label_3 = np.array([1 if i % 4 == 0 else 0 for i in range(len(X))])
+    Y = np.column_stack((label_1, label_2, label_3))
+    labels = ["Label 1", "Label 2", "Label 3"]
+    clf = FastTextMultiOutputClassifier()
+    clf.fit(X, Y, labels)
+    assert clf.multilabels[1] == "__label__Label_1"
+    assert clf.multilabels[2] == "__label__Label_1 __label__Label_2"
+    assert clf.multilabels[4] == "__label__Label_1 __label__Label_2 __label__Label_3"

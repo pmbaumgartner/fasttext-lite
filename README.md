@@ -26,3 +26,20 @@ import fasttext
 model = fasttext.load_model("mymodel/fasttext.bin")
 model.predict(["This is another sentence to predict on"])
 ```
+
+## Multilabel example
+```python
+import numpy as np
+from fasttext_lite import FastTextMultiOutputClassifier
+
+X = ["Pad thai", "Ice cream", "Tamarindo"]
+classes = ["Spicy", "Sweet", "Sour"]
+Y = np.array([
+    [1, 1, 1],
+    [0, 1, 0],
+    [0, 1, 1]
+])
+clf = FastTextMultiOutputClassifier(epoch=25, wordNgrams=2, minCount=2)
+clf.fit(X, Y, classes)
+p = clf.predict_proba(["Thai iced tea"])
+```
