@@ -39,7 +39,7 @@ Y = np.array([
     [0, 1, 0],
     [0, 1, 1]
 ])
-clf = FastTextMultiOutputClassifier(epoch=25, wordNgrams=2, minCount=2)
-clf.fit(X, Y, classes)
+clf = FastTextMultiOutputClassifier(classes=classes, epoch=25, wordNgrams=2, minCount=2)
+clf.fit(X, Y)
 p = clf.predict_proba(["Thai iced tea"])
 ```
