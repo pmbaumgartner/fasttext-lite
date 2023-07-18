@@ -131,8 +131,8 @@ def test_multiclass_fit_predict(sentences):
     label_3 = np.array([1 if i % 4 == 0 else 0 for i in range(len(X))])
     Y = np.column_stack((label_1, label_2, label_3))
     labels = ["Label 1", "Label 2", "Label 3"]
-    clf = FastTextMultiOutputClassifier()
-    clf.fit(X, Y, labels)
+    clf = FastTextMultiOutputClassifier(labels=labels)
+    clf.fit(X, Y)
     clf.predict(["This is a sentence to predict on"])
     clf.predict_proba(["This is a sentence to predict on", "this is another sentence"])
 
@@ -207,8 +207,8 @@ def test_multiclass_labels(sentences):
     label_3 = np.array([1 if i % 4 == 0 else 0 for i in range(len(X))])
     Y = np.column_stack((label_1, label_2, label_3))
     labels = ["Label 1", "Label 2", "Label 3"]
-    clf = FastTextMultiOutputClassifier()
-    clf.fit(X, Y, labels)
+    clf = FastTextMultiOutputClassifier(labels=labels)
+    clf.fit(X, Y)
     assert clf.multilabels[1] == "__label__Label_1"
     assert clf.multilabels[2] == "__label__Label_1 __label__Label_2"
     assert clf.multilabels[4] == "__label__Label_1 __label__Label_2 __label__Label_3"

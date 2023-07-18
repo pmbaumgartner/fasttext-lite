@@ -37,8 +37,8 @@ def convert_path(path: StrOrPath) -> Path:
 
 class BaseFastTextClassifier(ABC, BaseEstimator, ClassifierMixin):
     @abstractmethod
-    def fit(self):
-        pass
+    def fit(self, X, y) -> "BaseFastTextClassifier":
+        return self
 
     @property
     def n_labels(self):
@@ -190,7 +190,7 @@ class FastTextClassifier(BaseFastTextClassifier):
         self.is_quantized = False
         self.adjusted_labels: Dict[str, str] = {}
 
-    def fit(self, X, y) -> None:
+    def fit(self, X, y) -> "FastTextClassifier":
         """
         Parameters
         ----------
@@ -230,11 +230,13 @@ class FastTextClassifier(BaseFastTextClassifier):
             )
         self.classes_ = self.original_labels
         self.fitted = True
+        return self
 
 
 class FastTextMultiOutputClassifier(BaseFastTextClassifier):
     def __init__(
         self,
+        labels: list,
         lr: float = 0.1,
         dim: int = 100,
         ws: int = 5,
@@ -252,6 +254,7 @@ class FastTextMultiOutputClassifier(BaseFastTextClassifier):
         verbose: int = 2,
         thread: int = 2,
     ):
+        self.labels = labels
         self.lr = lr
         self.dim = dim
         self.ws = ws
@@ -274,20 +277,20 @@ class FastTextMultiOutputClassifier(BaseFastTextClassifier):
         self.is_quantized = False
         self.adjusted_labels: Dict[str, str] = {}
 
-    def fit(self, X, Y, labels) -> None:
+    def fit(self, X, y) -> "FastTextMultiOutputClassifier":
         """
         Parameters
         ----------
         X : 1d array-like of length n_samples, the text to be classified
 
-        Y : array-like of shape (n_samples, n_classes) where 1 indicates that the class
+        y : array-like of shape (n_samples, n_classes) where 1 indicates that the class
         is positive and 0 indicates that the class is negative, e.g., output of
         sklearn.preprocessing.MultiLabelBinarizer.
 
         labels: list-like of length n_classes, the labels corresponding to the
         columns of Y
         """
-        self.original_labels = self.sort_labels(labels)
+        self.original_labels = self.sort_labels(self.labels)
         self.adjusted_labels = {
             label: _adjust_label(label) for label in self.original_labels
         }
@@ -303,7 +306,7 @@ class FastTextMultiOutputClassifier(BaseFastTextClassifier):
             )
 
         self.multilabels = [
-            row_to_labels(row, self.original_labels, self.adjusted_labels) for row in Y
+            row_to_labels(row, self.original_labels, self.adjusted_labels) for row in y
         ]
 
         with NamedTemporaryFile() as train_file:
@@ -333,6 +336,7 @@ class FastTextMultiOutputClassifier(BaseFastTextClassifier):
             )
         self.classes_ = self.original_labels
         self.fitted = True
+        return self
 
     def predict(self, X):
         # Predicting a single class doesn't make sense in the multilabel context
