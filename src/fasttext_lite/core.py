@@ -341,3 +341,63 @@ class FastTextMultiOutputClassifier(BaseFastTextClassifier):
     def predict(self, X):
         # Predicting a single class doesn't make sense in the multilabel context
         self.predict_proba(X)
+
+    def save(self, path: StrOrPath, quantized=False) -> None:
+        path = convert_path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        """Save to a directory"""
+        if quantized:
+            self.model.quantize()
+        extension = "ftz" if quantized else "bin"
+        params = {
+            "labels": self.labels,
+            "lr": self.lr,
+            "dim": self.dim,
+            "ws": self.ws,
+            "epoch": self.epoch,
+            "minCount": self.minCount,
+            "minCountLabel": self.minCountLabel,
+            "minn": self.minn,
+            "maxn": self.maxn,
+            "neg": self.neg,
+            "wordNgrams": self.wordNgrams,
+            "bucket": self.bucket,
+            "lrUpdateRate": self.lrUpdateRate,
+            "t": self.t,
+        }
+        (path / "params.json").write_text(json.dumps(params, indent=4))
+        labels_data = {
+            "labels": [
+                {"original": label, "adjusted": self.adjusted_labels[label]}
+                for label in self.original_labels
+            ]
+        }
+        (path / "labels.json").write_text(json.dumps(labels_data, indent=4))
+
+        self.model.save_model(str(path / f"fasttext.{extension}"))
+
+    @classmethod
+    def load(cls, path: StrOrPath) -> "FastTextClassifier":
+        path = convert_path(path)
+        params = json.loads((path / "params.json").read_text())
+        labels_data = json.loads((path / "labels.json").read_text())
+        classes_ = []
+        adjusted_labels = {}
+        for label in labels_data["labels"]:
+            classes_.append(label["original"])
+            adjusted_labels[label["original"]] = label["adjusted"]
+        try:
+            model_file = next(
+                chain(path.glob("fasttext.ftz"), path.glob("fasttext.bin"))
+            )
+        except StopIteration:
+            raise ValueError("No file with .bin or .ftz extension in directory.")
+        clf = cls(**params)
+        clf.model = fasttext.load_model(str(model_file))
+        clf.fitted = True
+        clf.is_quantized = clf.model.is_quantized()
+        clf.classes_ = classes_
+        clf.adjusted_labels = adjusted_labels
+        clf.adjusted_labels_inverse = {v: k for k, v in adjusted_labels.items()}
+
+        return clf
